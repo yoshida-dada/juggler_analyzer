@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Juggler Analyzer - ジャグラー設定推測ツール</title>
+<meta name="description" content="ジャグラーシリーズの実戦データからブドウ確率の逆算・ベイズ推定による設定推測を行うブラウザアプリ" />
+<meta name="theme-color" content="#0d1117" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" type="image/png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <h1>Juggler Analyzer</h1>
+    <p class="app-subtitle">ジャグラー設定推測ツール(実戦解析支援)</p>
+  </header>
+
+  <main>
+    <!-- 4. 入力項目 -->
+    <section class="card" id="input-section">
+      <h2>入力</h2>
+      <div class="input-grid">
+        <label class="field">
+          <span>機種選択</span>
+          <select id="machine-select"></select>
+        </label>
+        <label class="field">
+          <span>総回転数 (G)</span>
+          <input type="number" id="input-total-spins" min="0" step="1" inputmode="numeric" placeholder="例: 5000" />
+        </label>
+        <label class="field">
+          <span>BIG回数</span>
+          <input type="number" id="input-big-count" min="0" step="1" inputmode="numeric" placeholder="例: 20" />
+        </label>
+        <label class="field">
+          <span>REG回数</span>
+          <input type="number" id="input-reg-count" min="0" step="1" inputmode="numeric" placeholder="例: 20" />
+        </label>
+        <label class="field">
+          <span>推定差枚数 (マイナス可)</span>
+          <input type="number" id="input-diff-coins" step="1" inputmode="numeric" placeholder="例: -500" />
+        </label>
+        <div class="field">
+          <span>チェリー狙い精度</span>
+          <div class="radio-group" id="cherry-accuracy-group">
+            <label><input type="radio" name="cherry-accuracy" value="1.0" checked /> 100%</label>
+            <label><input type="radio" name="cherry-accuracy" value="0.7" /> 70%</label>
+            <label><input type="radio" name="cherry-accuracy" value="0.5" /> 50%</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 22. 入力チェック -->
+    <section id="warnings-section" class="card warnings-card hidden">
+      <h2>⚠ 入力チェック</h2>
+      <ul id="warnings-list"></ul>
+    </section>
+
+    <!-- 7. 実測値 + 12. 信頼度 -->
+    <section class="card">
+      <h2>実測値 <span id="confidence-badge" class="badge">信頼度: -</span></h2>
+      <div class="measured-grid" id="measured-grid">
+        <div class="measured-item"><span class="label">BIG確率</span><span class="value" id="measured-big">-</span></div>
+        <div class="measured-item"><span class="label">REG確率</span><span class="value" id="measured-reg">-</span></div>
+        <div class="measured-item"><span class="label">合算確率</span><span class="value" id="measured-total">-</span></div>
+        <div class="measured-item"><span class="label">逆算ブドウ確率</span><span class="value" id="measured-grape">-</span></div>
+      </div>
+    </section>
+
+    <!-- 13. AIコメント -->
+    <section class="card">
+      <h2>AIコメント</h2>
+      <ul id="ai-comments-list" class="ai-comments"></ul>
+    </section>
+
+    <!-- 10. ベイズ推定 -->
+    <section class="card">
+      <h2>設定推測 (ベイズ推定)</h2>
+      <canvas id="bayes-chart" class="chart chart-bar"></canvas>
+    </section>
+
+    <!-- 11. 一致度スコア -->
+    <section class="card">
+      <h2>一致度スコア <span class="hint">(ベイズ推定とは別の指標。100点満点)</span></h2>
+      <div class="match-score-layout">
+        <canvas id="match-radar-chart" class="chart chart-radar"></canvas>
+        <div id="match-score-list" class="match-score-list"></div>
+      </div>
+    </section>
+
+    <!-- 17. 推測根拠 -->
+    <section class="card">
+      <h2>推測根拠</h2>
+      <ul id="estimation-basis-list" class="estimation-basis"></ul>
+    </section>
+
+    <!-- 8/9. スペック表 + 色分け -->
+    <section class="card">
+      <h2>スペック表 <span class="hint">(緑=良い / 黄=近い / 赤=悪い)</span></h2>
+      <div class="table-scroll">
+        <table id="spec-table" class="spec-table">
+          <thead>
+            <tr>
+              <th>設定</th><th>BIG確率</th><th>REG確率</th><th>合算</th><th>ブドウ確率</th><th>機械割</th>
+            </tr>
+          </thead>
+          <tbody id="spec-table-body"></tbody>
+          <tfoot id="spec-table-measured"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- 14. チェリー精度比較 -->
+    <section class="card">
+      <h2>チェリー精度比較</h2>
+      <div class="table-scroll">
+        <table id="cherry-comparison-table" class="cherry-table">
+          <thead>
+            <tr><th>取得率</th><th>逆算ブドウ確率</th><th>最有力設定</th><th>最有力確率</th></tr>
+          </thead>
+          <tbody id="cherry-comparison-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 15. 感度分析 -->
+    <section class="card">
+      <h2>感度分析 <span class="hint">(差枚数を ±100/±200/±300 させた場合)</span></h2>
+      <canvas id="sensitivity-chart" class="chart chart-sensitivity"></canvas>
+      <div class="table-scroll">
+        <table id="sensitivity-table" class="sensitivity-table">
+          <thead>
+            <tr><th>差枚</th><th>差枚数</th><th>逆算ブドウ確率</th><th>最有力設定</th></tr>
+          </thead>
+          <tbody id="sensitivity-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 16. 計算過程 -->
+    <section class="card">
+      <details id="calc-process-details">
+        <summary><h2 class="inline-h2">計算過程を表示</h2></summary>
+        <ul id="calc-process-list" class="calc-process"></ul>
+      </details>
+    </section>
+
+    <!-- 18. セッション履歴 -->
+    <section class="card">
+      <h2>セッション履歴 <span class="hint">(ブラウザを閉じるまで保持・最大20件)</span></h2>
+      <div class="history-actions">
+        <button type="button" id="save-history-btn">現在の結果を履歴に保存</button>
+        <button type="button" id="clear-history-btn">履歴をクリア</button>
+      </div>
+      <div class="table-scroll">
+        <table id="history-table" class="history-table">
+          <thead>
+            <tr><th>#</th><th>機種</th><th>G</th><th>BIG</th><th>REG</th><th>差枚</th><th>最有力設定</th></tr>
+          </thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- 23. 出典 -->
+  <footer class="app-footer">
+    <p>
+      本ツールの推測結果は目安であり、実際の設定を保証するものではありません。<br />
+      ボーナス確率(BIG確率・REG確率・機械割)は各種解析サイトで公表されているメーカー公表値ベースの数値を使用しています。<br />
+      ブドウ確率・チェリー確率は解析・実戦参考値であり、一部設定は公開データから補間した推定値です。参考値としてご利用ください。
+    </p>
+  </footer>
+</div>
+
+<script src="machineData.js"></script>
+<script src="calculator.js"></script>
+<script src="bayes.js"></script>
+<script src="charts.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

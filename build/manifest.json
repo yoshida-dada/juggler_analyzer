@@ -1,0 +1,26 @@
+{
+  "name": "Juggler Analyzer - ジャグラー設定推測ツール",
+  "short_name": "JugglerAnalyzer",
+  "description": "ジャグラーシリーズの実戦データからブドウ確率の逆算・ベイズ推定による設定推測を行うブラウザアプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

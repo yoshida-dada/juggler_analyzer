@@ -1,0 +1,418 @@
+/**
+ * styles.css
+ * ダークテーマ・レスポンシブ(PC/スマホ両対応)のスタイル定義。
+ */
+
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-muted: #8b949e;
+  --accent: #4f8ef7;
+  --good: #3fb950;
+  --near: #d29922;
+  --bad: #f85149;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+}
+
+.app-header {
+  text-align: center;
+  padding: 16px 0 8px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.02em;
+}
+
+.app-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inline-h2 {
+  display: inline-flex;
+  margin: 0;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- 入力フォーム ---------- */
+
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.field input,
+.field select {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 14px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* ---------- 警告 ---------- */
+
+.warnings-card {
+  border-color: var(--bad);
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.warnings-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.warnings-card li {
+  color: #ffb3ae;
+}
+
+/* ---------- 実測値 / 信頼度バッジ ---------- */
+
+.badge {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text);
+}
+
+.badge-low { background: rgba(248, 81, 73, 0.25); color: #ffb3ae; }
+.badge-mid { background: rgba(210, 153, 34, 0.25); color: #ffd479; }
+.badge-high { background: rgba(63, 185, 80, 0.25); color: #7ee787; }
+.badge-vhigh { background: rgba(79, 142, 247, 0.3); color: #a8c7ff; }
+
+.measured-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.measured-item {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.measured-item .label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.measured-item .value {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* ---------- AIコメント / 推測根拠 ---------- */
+
+.ai-comments,
+.estimation-basis {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-comments li,
+.estimation-basis li {
+  margin-bottom: 4px;
+}
+
+/* ---------- グラフ共通 ---------- */
+
+.chart {
+  width: 100%;
+  display: block;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.chart-bar {
+  height: 220px;
+}
+
+.chart-radar {
+  height: 260px;
+}
+
+.chart-sensitivity {
+  height: 220px;
+  margin-bottom: 12px;
+}
+
+/* ---------- 一致度スコア ---------- */
+
+.match-score-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .match-score-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.match-score-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.match-score-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.match-score-row.is-best .match-score-label,
+.match-score-row.is-best .match-score-value {
+  color: #ffb347;
+  font-weight: 700;
+}
+
+.match-score-track {
+  position: relative;
+  height: 10px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.match-score-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.match-score-row.is-best .match-score-bar {
+  background: #ffb347;
+}
+
+.match-score-value {
+  text-align: right;
+  color: var(--text-muted);
+}
+
+/* ---------- テーブル共通 ---------- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+th, td {
+  padding: 8px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--text-muted);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+tfoot .measured-row td {
+  font-weight: 700;
+  background: rgba(79, 142, 247, 0.12);
+  border-top: 2px solid var(--accent);
+}
+
+.sensitivity-table .current-row td {
+  background: rgba(79, 142, 247, 0.12);
+  font-weight: 700;
+}
+
+/* ---------- スペック表 色分け (仕様書9章) ---------- */
+
+.cell-good { color: var(--good); font-weight: 700; }
+.cell-near { color: var(--near); font-weight: 700; }
+.cell-bad { color: var(--bad); }
+.cell-neutral { color: var(--text-muted); }
+
+/* ---------- 計算過程 ---------- */
+
+.calc-process {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calc-process li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.calc-label { color: var(--text-muted); }
+.calc-value { font-weight: 600; }
+
+details summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details summary h2::before {
+  content: '▶ ';
+  font-size: 0.8em;
+}
+
+details[open] summary h2::before {
+  content: '▼ ';
+}
+
+/* ---------- 履歴 ---------- */
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.history-actions button {
+  background: var(--accent);
+  color: #041022;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history-actions button#clear-history-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* ---------- フッター ---------- */
+
+.app-footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  padding: 16px 8px 4px;
+}
+
+/* ---------- レスポンシブ調整 ---------- */
+
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.3rem;
+  }
+  .card {
+    padding: 12px;
+  }
+  th, td {
+    padding: 6px 6px;
+    font-size: 0.78rem;
+  }
+}

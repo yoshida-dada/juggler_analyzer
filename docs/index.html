@@ -1,0 +1,2201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Juggler Analyzer - ジャグラー設定推測ツール</title>
+<meta name="description" content="ジャグラーシリーズの実戦データからブドウ確率の逆算・ベイズ推定による設定推測を行うブラウザアプリ" />
+<meta name="theme-color" content="#0d1117" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" type="image/png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<style>
+/**
+ * styles.css
+ * ダークテーマ・レスポンシブ(PC/スマホ両対応)のスタイル定義。
+ */
+
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-muted: #8b949e;
+  --accent: #4f8ef7;
+  --good: #3fb950;
+  --near: #d29922;
+  --bad: #f85149;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+}
+
+.app-header {
+  text-align: center;
+  padding: 16px 0 8px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.02em;
+}
+
+.app-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inline-h2 {
+  display: inline-flex;
+  margin: 0;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- 入力フォーム ---------- */
+
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.field input,
+.field select {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 14px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* ---------- 警告 ---------- */
+
+.warnings-card {
+  border-color: var(--bad);
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.warnings-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.warnings-card li {
+  color: #ffb3ae;
+}
+
+/* ---------- 実測値 / 信頼度バッジ ---------- */
+
+.badge {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text);
+}
+
+.badge-low { background: rgba(248, 81, 73, 0.25); color: #ffb3ae; }
+.badge-mid { background: rgba(210, 153, 34, 0.25); color: #ffd479; }
+.badge-high { background: rgba(63, 185, 80, 0.25); color: #7ee787; }
+.badge-vhigh { background: rgba(79, 142, 247, 0.3); color: #a8c7ff; }
+
+.measured-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.measured-item {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.measured-item .label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.measured-item .value {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* ---------- AIコメント / 推測根拠 ---------- */
+
+.ai-comments,
+.estimation-basis {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-comments li,
+.estimation-basis li {
+  margin-bottom: 4px;
+}
+
+/* ---------- グラフ共通 ---------- */
+
+.chart {
+  width: 100%;
+  display: block;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.chart-bar {
+  height: 220px;
+}
+
+.chart-radar {
+  height: 260px;
+}
+
+.chart-sensitivity {
+  height: 220px;
+  margin-bottom: 12px;
+}
+
+/* ---------- 一致度スコア ---------- */
+
+.match-score-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .match-score-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.match-score-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.match-score-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.match-score-row.is-best .match-score-label,
+.match-score-row.is-best .match-score-value {
+  color: #ffb347;
+  font-weight: 700;
+}
+
+.match-score-track {
+  position: relative;
+  height: 10px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.match-score-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.match-score-row.is-best .match-score-bar {
+  background: #ffb347;
+}
+
+.match-score-value {
+  text-align: right;
+  color: var(--text-muted);
+}
+
+/* ---------- テーブル共通 ---------- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+th, td {
+  padding: 8px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--text-muted);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+tfoot .measured-row td {
+  font-weight: 700;
+  background: rgba(79, 142, 247, 0.12);
+  border-top: 2px solid var(--accent);
+}
+
+.sensitivity-table .current-row td {
+  background: rgba(79, 142, 247, 0.12);
+  font-weight: 700;
+}
+
+/* ---------- スペック表 色分け (仕様書9章) ---------- */
+
+.cell-good { color: var(--good); font-weight: 700; }
+.cell-near { color: var(--near); font-weight: 700; }
+.cell-bad { color: var(--bad); }
+.cell-neutral { color: var(--text-muted); }
+
+/* ---------- 計算過程 ---------- */
+
+.calc-process {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calc-process li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.calc-label { color: var(--text-muted); }
+.calc-value { font-weight: 600; }
+
+details summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details summary h2::before {
+  content: '▶ ';
+  font-size: 0.8em;
+}
+
+details[open] summary h2::before {
+  content: '▼ ';
+}
+
+/* ---------- 履歴 ---------- */
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.history-actions button {
+  background: var(--accent);
+  color: #041022;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history-actions button#clear-history-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* ---------- フッター ---------- */
+
+.app-footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  padding: 16px 8px 4px;
+}
+
+/* ---------- レスポンシブ調整 ---------- */
+
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.3rem;
+  }
+  .card {
+    padding: 12px;
+  }
+  th, td {
+    padding: 6px 6px;
+    font-size: 0.78rem;
+  }
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <h1>Juggler Analyzer</h1>
+    <p class="app-subtitle">ジャグラー設定推測ツール(実戦解析支援)</p>
+  </header>
+
+  <main>
+    <!-- 4. 入力項目 -->
+    <section class="card" id="input-section">
+      <h2>入力</h2>
+      <div class="input-grid">
+        <label class="field">
+          <span>機種選択</span>
+          <select id="machine-select"></select>
+        </label>
+        <label class="field">
+          <span>総回転数 (G)</span>
+          <input type="number" id="input-total-spins" min="0" step="1" inputmode="numeric" placeholder="例: 5000" />
+        </label>
+        <label class="field">
+          <span>BIG回数</span>
+          <input type="number" id="input-big-count" min="0" step="1" inputmode="numeric" placeholder="例: 20" />
+        </label>
+        <label class="field">
+          <span>REG回数</span>
+          <input type="number" id="input-reg-count" min="0" step="1" inputmode="numeric" placeholder="例: 20" />
+        </label>
+        <label class="field">
+          <span>推定差枚数 (マイナス可)</span>
+          <input type="number" id="input-diff-coins" step="1" inputmode="numeric" placeholder="例: -500" />
+        </label>
+        <div class="field">
+          <span>チェリー狙い精度</span>
+          <div class="radio-group" id="cherry-accuracy-group">
+            <label><input type="radio" name="cherry-accuracy" value="1.0" checked /> 100%</label>
+            <label><input type="radio" name="cherry-accuracy" value="0.7" /> 70%</label>
+            <label><input type="radio" name="cherry-accuracy" value="0.5" /> 50%</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 22. 入力チェック -->
+    <section id="warnings-section" class="card warnings-card hidden">
+      <h2>⚠ 入力チェック</h2>
+      <ul id="warnings-list"></ul>
+    </section>
+
+    <!-- 7. 実測値 + 12. 信頼度 -->
+    <section class="card">
+      <h2>実測値 <span id="confidence-badge" class="badge">信頼度: -</span></h2>
+      <div class="measured-grid" id="measured-grid">
+        <div class="measured-item"><span class="label">BIG確率</span><span class="value" id="measured-big">-</span></div>
+        <div class="measured-item"><span class="label">REG確率</span><span class="value" id="measured-reg">-</span></div>
+        <div class="measured-item"><span class="label">合算確率</span><span class="value" id="measured-total">-</span></div>
+        <div class="measured-item"><span class="label">逆算ブドウ確率</span><span class="value" id="measured-grape">-</span></div>
+      </div>
+    </section>
+
+    <!-- 13. AIコメント -->
+    <section class="card">
+      <h2>AIコメント</h2>
+      <ul id="ai-comments-list" class="ai-comments"></ul>
+    </section>
+
+    <!-- 10. ベイズ推定 -->
+    <section class="card">
+      <h2>設定推測 (ベイズ推定)</h2>
+      <canvas id="bayes-chart" class="chart chart-bar"></canvas>
+    </section>
+
+    <!-- 11. 一致度スコア -->
+    <section class="card">
+      <h2>一致度スコア <span class="hint">(ベイズ推定とは別の指標。100点満点)</span></h2>
+      <div class="match-score-layout">
+        <canvas id="match-radar-chart" class="chart chart-radar"></canvas>
+        <div id="match-score-list" class="match-score-list"></div>
+      </div>
+    </section>
+
+    <!-- 17. 推測根拠 -->
+    <section class="card">
+      <h2>推測根拠</h2>
+      <ul id="estimation-basis-list" class="estimation-basis"></ul>
+    </section>
+
+    <!-- 8/9. スペック表 + 色分け -->
+    <section class="card">
+      <h2>スペック表 <span class="hint">(緑=良い / 黄=近い / 赤=悪い)</span></h2>
+      <div class="table-scroll">
+        <table id="spec-table" class="spec-table">
+          <thead>
+            <tr>
+              <th>設定</th><th>BIG確率</th><th>REG確率</th><th>合算</th><th>ブドウ確率</th><th>機械割</th>
+            </tr>
+          </thead>
+          <tbody id="spec-table-body"></tbody>
+          <tfoot id="spec-table-measured"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- 14. チェリー精度比較 -->
+    <section class="card">
+      <h2>チェリー精度比較</h2>
+      <div class="table-scroll">
+        <table id="cherry-comparison-table" class="cherry-table">
+          <thead>
+            <tr><th>取得率</th><th>逆算ブドウ確率</th><th>最有力設定</th><th>最有力確率</th></tr>
+          </thead>
+          <tbody id="cherry-comparison-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 15. 感度分析 -->
+    <section class="card">
+      <h2>感度分析 <span class="hint">(差枚数を ±100/±200/±300 させた場合)</span></h2>
+      <canvas id="sensitivity-chart" class="chart chart-sensitivity"></canvas>
+      <div class="table-scroll">
+        <table id="sensitivity-table" class="sensitivity-table">
+          <thead>
+            <tr><th>差枚</th><th>差枚数</th><th>逆算ブドウ確率</th><th>最有力設定</th></tr>
+          </thead>
+          <tbody id="sensitivity-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 16. 計算過程 -->
+    <section class="card">
+      <details id="calc-process-details">
+        <summary><h2 class="inline-h2">計算過程を表示</h2></summary>
+        <ul id="calc-process-list" class="calc-process"></ul>
+      </details>
+    </section>
+
+    <!-- 18. セッション履歴 -->
+    <section class="card">
+      <h2>セッション履歴 <span class="hint">(ブラウザを閉じるまで保持・最大20件)</span></h2>
+      <div class="history-actions">
+        <button type="button" id="save-history-btn">現在の結果を履歴に保存</button>
+        <button type="button" id="clear-history-btn">履歴をクリア</button>
+      </div>
+      <div class="table-scroll">
+        <table id="history-table" class="history-table">
+          <thead>
+            <tr><th>#</th><th>機種</th><th>G</th><th>BIG</th><th>REG</th><th>差枚</th><th>最有力設定</th></tr>
+          </thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- 23. 出典 -->
+  <footer class="app-footer">
+    <p>
+      本ツールの推測結果は目安であり、実際の設定を保証するものではありません。<br />
+      ボーナス確率(BIG確率・REG確率・機械割)は各種解析サイトで公表されているメーカー公表値ベースの数値を使用しています。<br />
+      ブドウ確率・チェリー確率は解析・実戦参考値であり、一部設定は公開データから補間した推定値です。参考値としてご利用ください。
+    </p>
+  </footer>
+</div>
+
+<script>
+/**
+ * machineData.js
+ *
+ * ジャグラーシリーズ 機種データ定義。
+ *
+ * 方針:
+ *   - 計算ロジック（calculator.js / bayes.js）は、この JSON 相当のデータのみを参照し、
+ *     設定値やBIG/REG確率などを計算ロジック内に直接埋め込まない。
+ *   - 新機種を追加する場合は、この配列に1エントリ追加するだけでよい。
+ *
+ * データソースについて（画面下部「出典」欄にも同内容を表示）:
+ *   - BIG確率・REG確率・機械割 は各種解析サイトで公表されているメーカー公表値ベースの数値。
+ *   - ブドウ確率・チェリー確率 は実戦・解析サイトによる参考値であり、
+ *     一部設定（例: 設定2〜4等）は公開されている設定1・5・6等の実測値から線形補間している。
+ *     このため参考値として扱うこと（本アプリ内でも「参考値」である旨を明示する）。
+ *   - BIG獲得枚数・REG獲得枚数・ブドウ払い出し・リプレイ確率は6号機ジャグラーシリーズの
+ *     共通仕様（リプレイ確率 1/7.3、ブドウ払い出し 8枚 など）を用いている。
+ *
+ * 各設定(1〜6)は以下を保持する:
+ *   bigRate   : BIG確率の分母 (例: 269.7 → 1/269.7)
+ *   regRate   : REG確率の分母
+ *   grapeRate : ブドウ確率の分母
+ *   rtp       : 機械割 (%)
+ *   合算 (合成確率) は bigRate・regRate から調和平均で算出するため、ここでは保持しない。
+ */
+
+var JA = window.JA || (window.JA = {});
+
+JA.machineData = [
+  {
+    id: 'im_juggler_ex',
+    name: 'アイムジャグラーEX',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 252,
+    regPayout: 96,
+    grapePayout: 8,
+    // チェリー確率(分母)。設定1〜6でほぼ横ばいのため区間補間。
+    cherryRates: [35.5, 35.5, 35.5, 35.5, 35.5, 35.6],
+    settings: {
+      1: { bigRate: 273.1, regRate: 439.8, grapeRate: 6.01, rtp: 97.0 },
+      2: { bigRate: 269.7, regRate: 399.6, grapeRate: 6.01, rtp: 98.0 },
+      3: { bigRate: 269.7, regRate: 331.0, grapeRate: 6.01, rtp: 99.5 },
+      4: { bigRate: 259.0, regRate: 315.1, grapeRate: 6.01, rtp: 101.1 },
+      5: { bigRate: 259.0, regRate: 255.0, grapeRate: 6.01, rtp: 103.3 },
+      6: { bigRate: 255.0, regRate: 255.0, grapeRate: 5.80, rtp: 105.5 }
+    }
+  },
+  {
+    id: 'neo_im_juggler_ex',
+    name: 'ネオアイムジャグラーEX',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 252,
+    regPayout: 96,
+    grapePayout: 8,
+    cherryRates: [30.10, 29.75, 29.40, 29.05, 28.68, 28.31],
+    settings: {
+      1: { bigRate: 273.1, regRate: 439.8, grapeRate: 6.11, rtp: 97.0 },
+      2: { bigRate: 269.7, regRate: 399.6, grapeRate: 6.05, rtp: 98.0 },
+      3: { bigRate: 269.7, regRate: 331.0, grapeRate: 5.99, rtp: 99.5 },
+      4: { bigRate: 259.0, regRate: 315.1, grapeRate: 5.93, rtp: 101.1 },
+      5: { bigRate: 259.0, regRate: 255.0, grapeRate: 5.86, rtp: 103.3 },
+      6: { bigRate: 255.0, regRate: 255.0, grapeRate: 5.79, rtp: 105.5 }
+    }
+  },
+  {
+    id: 'my_juggler_v',
+    name: 'マイジャグラーV',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    cherryRates: [38.1, 37.5, 36.9, 36.3, 35.7, 35.1],
+    settings: {
+      1: { bigRate: 273.1, regRate: 409.6, grapeRate: 5.98, rtp: 97.0 },
+      2: { bigRate: 270.8, regRate: 385.8, grapeRate: 5.88, rtp: 98.0 },
+      3: { bigRate: 266.4, regRate: 336.1, grapeRate: 5.84, rtp: 99.9 },
+      4: { bigRate: 254.0, regRate: 290.0, grapeRate: 5.81, rtp: 102.8 },
+      5: { bigRate: 240.1, regRate: 268.6, grapeRate: 5.76, rtp: 105.3 },
+      6: { bigRate: 229.1, regRate: 229.1, grapeRate: 5.65, rtp: 109.4 }
+    }
+  },
+  {
+    id: 'funky_juggler_2',
+    name: 'ファンキージャグラー2',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    cherryRates: [35.5, 35.6, 35.6, 35.7, 35.7, 35.8],
+    settings: {
+      1: { bigRate: 266.4, regRate: 439.8, grapeRate: 5.94, rtp: 97.0 },
+      2: { bigRate: 259.0, regRate: 407.1, grapeRate: 5.92, rtp: 98.5 },
+      3: { bigRate: 256.0, regRate: 366.1, grapeRate: 5.90, rtp: 99.8 },
+      4: { bigRate: 249.2, regRate: 322.8, grapeRate: 5.83, rtp: 102.0 },
+      5: { bigRate: 240.1, regRate: 299.3, grapeRate: 5.80, rtp: 104.3 },
+      6: { bigRate: 219.9, regRate: 262.1, grapeRate: 5.70, rtp: 109.0 }
+    }
+  },
+  {
+    id: 'gogo_juggler_3',
+    name: 'ゴーゴージャグラー3',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    cherryRates: [33.00, 32.98, 32.95, 32.90, 32.85, 32.80],
+    settings: {
+      1: { bigRate: 259.0, regRate: 354.2, grapeRate: 6.33, rtp: 97.2 },
+      2: { bigRate: 258.0, regRate: 332.7, grapeRate: 6.20, rtp: 98.2 },
+      3: { bigRate: 257.0, regRate: 306.2, grapeRate: 6.15, rtp: 99.4 },
+      4: { bigRate: 254.0, regRate: 268.6, grapeRate: 6.08, rtp: 101.6 },
+      5: { bigRate: 247.3, regRate: 247.3, grapeRate: 6.01, rtp: 103.8 },
+      6: { bigRate: 234.9, regRate: 234.9, grapeRate: 5.96, rtp: 106.5 }
+    }
+  },
+  {
+    id: 'happy_juggler_8',
+    name: 'ハッピージャグラーVⅧ',
+    replayRate: 7.3,
+    cherryPayout: 4,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    cherryRates: [62.1, 61.5, 61.1, 64.5, 64.9, 65.5],
+    settings: {
+      1: { bigRate: 273.1, regRate: 397.2, grapeRate: 6.05, rtp: 97.0 },
+      2: { bigRate: 270.8, regRate: 362.1, grapeRate: 6.04, rtp: 98.1 },
+      3: { bigRate: 263.2, regRate: 332.7, grapeRate: 6.02, rtp: 99.9 },
+      4: { bigRate: 254.0, regRate: 300.6, grapeRate: 5.90, rtp: 102.9 },
+      5: { bigRate: 239.2, regRate: 273.1, grapeRate: 5.81, rtp: 105.8 },
+      6: { bigRate: 226.0, regRate: 256.0, grapeRate: 5.75, rtp: 108.4 }
+    }
+  },
+  {
+    id: 'juggler_girls_ss',
+    name: 'ジャグラーガールズSS',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    // 実戦値のため設定1・5・6のみ公開。2〜4は補間値。
+    cherryRates: [41.1, 39.2, 37.3, 35.9, 34.6, 31.3],
+    settings: {
+      1: { bigRate: 273.1, regRate: 381.0, grapeRate: 6.20, rtp: 97.0 },
+      2: { bigRate: 270.8, regRate: 350.5, grapeRate: 6.10, rtp: 97.9 },
+      3: { bigRate: 260.1, regRate: 316.6, grapeRate: 6.00, rtp: 99.9 },
+      4: { bigRate: 250.1, regRate: 281.3, grapeRate: 5.95, rtp: 102.1 },
+      5: { bigRate: 243.6, regRate: 270.8, grapeRate: 5.90, rtp: 104.0 },
+      6: { bigRate: 226.0, regRate: 252.1, grapeRate: 5.80, rtp: 107.5 }
+    }
+  },
+  {
+    id: 'mr_juggler',
+    name: 'ミスタージャグラー',
+    replayRate: 7.3,
+    cherryPayout: 4,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    // 実戦値のため設定1・5・6のみ公開。2〜4は補間値。
+    cherryRates: [38.74, 38.14, 37.54, 36.93, 36.33, 35.02],
+    settings: {
+      1: { bigRate: 268.6, regRate: 374.5, grapeRate: 6.50, rtp: 97.0 },
+      2: { bigRate: 267.5, regRate: 354.2, grapeRate: 6.40, rtp: 98.0 },
+      3: { bigRate: 260.1, regRate: 331.0, grapeRate: 6.31, rtp: 99.8 },
+      4: { bigRate: 249.2, regRate: 291.3, grapeRate: 6.21, rtp: 102.7 },
+      5: { bigRate: 240.9, regRate: 257.0, grapeRate: 6.12, rtp: 105.5 },
+      6: { bigRate: 237.4, regRate: 237.4, grapeRate: 5.84, rtp: 107.3 }
+    }
+  },
+  {
+    id: 'ultra_miracle_juggler',
+    name: 'ウルトラミラクルジャグラー',
+    replayRate: 7.3,
+    cherryPayout: 2,
+    bigPayout: 240,
+    regPayout: 96,
+    grapePayout: 8,
+    // 実戦値のため設定1・5・6のみ公開。2〜4は補間値。
+    cherryRates: [37.91, 37.77, 37.62, 37.47, 37.33, 36.95],
+    settings: {
+      1: { bigRate: 267.5, regRate: 425.6, grapeRate: 6.07, rtp: 97.0 },
+      2: { bigRate: 261.1, regRate: 402.1, grapeRate: 6.00, rtp: 98.1 },
+      3: { bigRate: 256.0, regRate: 350.5, grapeRate: 5.94, rtp: 99.8 },
+      4: { bigRate: 242.7, regRate: 322.8, grapeRate: 5.87, rtp: 102.1 },
+      5: { bigRate: 233.2, regRate: 297.9, grapeRate: 5.80, rtp: 104.5 },
+      6: { bigRate: 216.3, regRate: 277.7, grapeRate: 5.72, rtp: 108.1 }
+    }
+  }
+];
+
+/**
+ * IDから機種データを取得する。
+ * @param {string} id
+ * @returns {object|undefined}
+ */
+JA.getMachineById = function (id) {
+  return JA.machineData.find((m) => m.id === id);
+};
+
+/**
+ * 指定機種・設定における「合算確率」の分母を調和平均で算出する。
+ * 1/合算 = 1/BIG + 1/REG
+ * @param {number} bigRate BIG確率の分母
+ * @param {number} regRate REG確率の分母
+ * @returns {number} 合算確率の分母
+ */
+JA.getCombinedRateDenom = function (bigRate, regRate) {
+  return 1 / (1 / bigRate + 1 / regRate);
+};
+
+</script>
+<script>
+/**
+ * calculator.js
+ *
+ * 純粋な計算ロジックのみを扱うモジュール。UI(DOM)には一切関与しない。
+ * 機種固有の設定値は machineData.js から渡された値のみを使用し、
+ * このファイル内には決して埋め込まない。
+ *
+ * 差枚の定義 (仕様書 5章):
+ *   差枚 = 払い出し枚数 − 投入枚数 (純増差枚)
+ *   本モジュールの逆算式は、この定義と符号が整合するように統一している。
+ *   つまり「投入」はプラス、「払出」はマイナスとして差枚の式に現れる:
+ *     差枚 = (ブドウ払出 + チェリー払出 + BIG払出 + REG払出) − 投入
+ *   → ブドウ払出 = 差枚 + 投入 − BIG払出 − REG払出 − チェリー払出 (仕様書 6章の式)
+ */
+
+var JA = window.JA || (window.JA = {});
+
+JA.calculator = (function () {
+  /**
+   * 投入枚数を算出する。
+   * 投入枚数 = 3 × G × (1 − リプレイ確率)
+   * @param {number} totalSpins 総回転数 G
+   * @param {number} replayRateDenom リプレイ確率の分母 (例: 7.3 → 1/7.3)
+   * @returns {number}
+   */
+  function calcInvestment(totalSpins, replayRateDenom) {
+    const replayProbability = 1 / replayRateDenom;
+    return 3 * totalSpins * (1 - replayProbability);
+  }
+
+  /**
+   * BIG払い出し総数を算出する。
+   * @param {number} bigCount BIG回数
+   * @param {number} bigPayout BIG1回あたりの獲得枚数
+   * @returns {number}
+   */
+  function calcBigPayoutTotal(bigCount, bigPayout) {
+    return bigCount * bigPayout;
+  }
+
+  /**
+   * REG払い出し総数を算出する。
+   * @param {number} regCount REG回数
+   * @param {number} regPayout REG1回あたりの獲得枚数
+   * @returns {number}
+   */
+  function calcRegPayoutTotal(regCount, regPayout) {
+    return regCount * regPayout;
+  }
+
+  /**
+   * チェリー期待回数を算出する。
+   * チェリー期待回数 = G × チェリー確率
+   * @param {number} totalSpins 総回転数 G
+   * @param {number} cherryRateDenom チェリー確率の分母
+   * @returns {number}
+   */
+  function calcCherryExpectedCount(totalSpins, cherryRateDenom) {
+    return totalSpins * (1 / cherryRateDenom);
+  }
+
+  /**
+   * チェリー払い出し期待値を算出する。
+   * チェリー払い出し期待値 = 期待回数 × 取得率 × 払い出し枚数
+   * @param {number} cherryExpectedCount チェリー期待回数
+   * @param {number} captureRate 取得率 (1.0 / 0.7 / 0.5)
+   * @param {number} cherryPayout チェリー1回あたりの払い出し枚数
+   * @returns {number}
+   */
+  function calcCherryPayoutExpected(cherryExpectedCount, captureRate, cherryPayout) {
+    return cherryExpectedCount * captureRate * cherryPayout;
+  }
+
+  /**
+   * 推定ブドウ回数を算出する。
+   * 推定ブドウ回数 = (差枚 + 投入 − BIG払出 − REG払出 − チェリー払出) ÷ 8
+   * @param {object} params
+   * @param {number} params.diffCoins 推定差枚数
+   * @param {number} params.investment 投入枚数
+   * @param {number} params.bigPayoutTotal BIG払出総数
+   * @param {number} params.regPayoutTotal REG払出総数
+   * @param {number} params.cherryPayoutExpected チェリー払出期待値
+   * @param {number} params.grapePayout ブドウ1回あたりの払い出し枚数 (通常8枚)
+   * @returns {number}
+   */
+  function calcEstimatedGrapeCount(params) {
+    const {
+      diffCoins,
+      investment,
+      bigPayoutTotal,
+      regPayoutTotal,
+      cherryPayoutExpected,
+      grapePayout
+    } = params;
+    return (
+      (diffCoins + investment - bigPayoutTotal - regPayoutTotal - cherryPayoutExpected) /
+      grapePayout
+    );
+  }
+
+  /**
+   * 逆算ブドウ確率の分母 (G ÷ 推定ブドウ回数) を算出する。
+   * 推定ブドウ回数が0以下の場合は逆算不能として null を返す。
+   * @param {number} totalSpins 総回転数 G
+   * @param {number} estimatedGrapeCount 推定ブドウ回数
+   * @returns {number|null}
+   */
+  function calcGrapeRateDenom(totalSpins, estimatedGrapeCount) {
+    if (!(estimatedGrapeCount > 0)) return null;
+    return totalSpins / estimatedGrapeCount;
+  }
+
+  /**
+   * 指定した取得率(チェリー狙い精度)1件分の逆算結果一式を計算する。
+   * @param {object} machine 機種データ
+   * @param {object} input { totalSpins, bigCount, regCount, diffCoins }
+   * @param {number} captureRate 取得率 (1.0 / 0.7 / 0.5)
+   * @returns {object} 計算過程と結果一式
+   */
+  function calcGrapeAnalysis(machine, input, captureRate) {
+    const investment = calcInvestment(input.totalSpins, machine.replayRate);
+    const bigPayoutTotal = calcBigPayoutTotal(input.bigCount, machine.bigPayout);
+    const regPayoutTotal = calcRegPayoutTotal(input.regCount, machine.regPayout);
+
+    // チェリー確率は機種によって設定差があるため、6設定の平均値を代表値として使用する。
+    const avgCherryRateDenom =
+      machine.cherryRates.reduce((sum, v) => sum + v, 0) / machine.cherryRates.length;
+    const cherryExpectedCount = calcCherryExpectedCount(input.totalSpins, avgCherryRateDenom);
+    const cherryPayoutExpected = calcCherryPayoutExpected(
+      cherryExpectedCount,
+      captureRate,
+      machine.cherryPayout
+    );
+
+    const estimatedGrapeCount = calcEstimatedGrapeCount({
+      diffCoins: input.diffCoins,
+      investment,
+      bigPayoutTotal,
+      regPayoutTotal,
+      cherryPayoutExpected,
+      grapePayout: machine.grapePayout
+    });
+
+    const grapeRateDenom = calcGrapeRateDenom(input.totalSpins, estimatedGrapeCount);
+
+    return {
+      captureRate,
+      investment,
+      bigPayoutTotal,
+      regPayoutTotal,
+      cherryExpectedCount,
+      cherryPayoutExpected,
+      estimatedGrapeCount,
+      grapeRateDenom
+    };
+  }
+
+  /**
+   * 実測BIG確率の分母を算出する。
+   * @param {number} totalSpins
+   * @param {number} bigCount
+   * @returns {number|null}
+   */
+  function calcMeasuredBigRate(totalSpins, bigCount) {
+    if (!(bigCount > 0)) return null;
+    return totalSpins / bigCount;
+  }
+
+  /**
+   * 実測REG確率の分母を算出する。
+   * @param {number} totalSpins
+   * @param {number} regCount
+   * @returns {number|null}
+   */
+  function calcMeasuredRegRate(totalSpins, regCount) {
+    if (!(regCount > 0)) return null;
+    return totalSpins / regCount;
+  }
+
+  /**
+   * 実測合算確率の分母を算出する。
+   * @param {number} totalSpins
+   * @param {number} bigCount
+   * @param {number} regCount
+   * @returns {number|null}
+   */
+  function calcMeasuredTotalRate(totalSpins, bigCount, regCount) {
+    const total = bigCount + regCount;
+    if (!(total > 0)) return null;
+    return totalSpins / total;
+  }
+
+  /**
+   * 信頼度(回転数ベース)を判定する。
+   * 仕様書12章:
+   *   1000G未満 → 低 / 1000〜4999G → 普通 / 5000〜6999G → 高 / 7000G以上 → 非常に高
+   * @param {number} totalSpins
+   * @returns {string}
+   */
+  function calcConfidenceLevel(totalSpins) {
+    if (totalSpins < 1000) return '低';
+    if (totalSpins < 5000) return '普通';
+    if (totalSpins < 7000) return '高';
+    return '非常に高';
+  }
+
+  /**
+   * 入力値の異常チェックを行う。
+   * @param {object} input { totalSpins, bigCount, regCount, diffCoins }
+   * @param {object} grapeAnalysisAt100 captureRate=1.0 での calcGrapeAnalysis 結果
+   * @returns {string[]} 警告メッセージの配列 (異常なしの場合は空配列)
+   */
+  function validateInput(input, grapeAnalysisAt100) {
+    const warnings = [];
+    const { totalSpins, bigCount, regCount } = input;
+
+    if (totalSpins <= 0) {
+      warnings.push('総回転数(G)は1以上を入力してください。');
+      return warnings;
+    }
+    if (bigCount < 0 || regCount < 0) {
+      warnings.push('BIG回数・REG回数は0以上を入力してください。');
+    }
+    // BIG回数が理論上あり得ない頻度 (平均7G/回未満、設定6でも通常130G程度以上) になっていないか
+    if (bigCount > 0 && totalSpins / bigCount < 50) {
+      warnings.push('BIGが多すぎます。回転数またはBIG回数の入力を確認してください。');
+    }
+    if (regCount > 0 && totalSpins / regCount < 50) {
+      warnings.push('REGが多すぎます。回転数またはREG回数の入力を確認してください。');
+    }
+    if (bigCount + regCount > totalSpins) {
+      warnings.push('BIG回数とREG回数の合計が総回転数を超えています。入力値を確認してください。');
+    }
+    if (grapeAnalysisAt100.estimatedGrapeCount < 0) {
+      warnings.push('ブドウが負数になっています。差枚数・BIG/REG回数の入力を確認してください。');
+    }
+    if (grapeAnalysisAt100.grapeRateDenom !== null && grapeAnalysisAt100.grapeRateDenom < 3) {
+      warnings.push('差枚矛盾: 逆算ブドウ確率が理論上あり得ない高頻度です。入力値を確認してください。');
+    }
+
+    return warnings;
+  }
+
+  return {
+    calcInvestment,
+    calcBigPayoutTotal,
+    calcRegPayoutTotal,
+    calcCherryExpectedCount,
+    calcCherryPayoutExpected,
+    calcEstimatedGrapeCount,
+    calcGrapeRateDenom,
+    calcGrapeAnalysis,
+    calcMeasuredBigRate,
+    calcMeasuredRegRate,
+    calcMeasuredTotalRate,
+    calcConfidenceLevel,
+    validateInput
+  };
+})();
+
+</script>
+<script>
+/**
+ * bayes.js
+ *
+ * ベイズ推定・一致度スコア・信頼度・AIコメント・推測根拠・感度分析など、
+ * 統計的な設定推測ロジックを扱うモジュール。UI(DOM)には一切関与しない。
+ */
+
+var JA = window.JA || (window.JA = {});
+
+JA.bayes = (function () {
+  const calculator = JA.calculator;
+
+  // ------------------------------------------------------------------
+  // 二項分布の対数尤度計算 (数値安定性のため対数尤度で計算する: 仕様書10章)
+  // ------------------------------------------------------------------
+
+  /**
+   * Lanczos近似によるlogガンマ関数。
+   * 大きな回転数(G)でも log(n!) 等をオーバーフローなく計算するために使用する。
+   * @param {number} x
+   * @returns {number}
+   */
+  function logGamma(x) {
+    const g = 7;
+    const p = [
+      0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+      771.32342877765313, -176.61502916214059, 12.507343278686905,
+      -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7
+    ];
+    if (x < 0.5) {
+      return Math.log(Math.PI / Math.sin(Math.PI * x)) - logGamma(1 - x);
+    }
+    x -= 1;
+    let a = p[0];
+    const t = x + g + 0.5;
+    for (let i = 1; i < g + 2; i++) {
+      a += p[i] / (x + i);
+    }
+    return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+  }
+
+  /** log( nCk ) を対数ガンマ関数経由で算出する。 */
+  function logBinomCoeff(n, k) {
+    return logGamma(n + 1) - logGamma(k + 1) - logGamma(n - k + 1);
+  }
+
+  /**
+   * 二項分布 B(n, p) において k 回発生する対数尤度を算出する。
+   * @param {number} k 発生回数
+   * @param {number} n 試行回数
+   * @param {number} p 理論確率
+   * @returns {number}
+   */
+  function logBinomialLikelihood(k, n, p) {
+    const clampedP = Math.min(Math.max(p, 1e-12), 1 - 1e-12);
+    const clampedK = Math.min(Math.max(k, 0), n);
+    return (
+      logBinomCoeff(n, clampedK) +
+      clampedK * Math.log(clampedP) +
+      (n - clampedK) * Math.log(1 - clampedP)
+    );
+  }
+
+  /**
+   * 設定1〜6の事後確率をベイズ推定で算出する。
+   * 事前確率は各設定 1/6 の一様分布。
+   * BIG・REG・ブドウそれぞれの二項尤度を掛け合わせ(対数尤度では加算)、正規化する。
+   *
+   * @param {object} machine 機種データ
+   * @param {object} input { totalSpins, bigCount, regCount }
+   * @param {number} estimatedGrapeCount 推定ブドウ回数 (calculator.calcGrapeAnalysis の結果)
+   * @returns {number[]} 設定1〜6の事後確率 (合計1.0, 添字0が設定1)
+   */
+  function calculatePosterior(machine, input, estimatedGrapeCount) {
+    const G = input.totalSpins;
+    const logPrior = Math.log(1 / 6);
+    const grapeK = Math.min(Math.max(Math.round(estimatedGrapeCount), 0), G);
+
+    const logPosteriors = [];
+    for (let s = 1; s <= 6; s++) {
+      const spec = machine.settings[s];
+      const pBig = 1 / spec.bigRate;
+      const pReg = 1 / spec.regRate;
+      const pGrape = 1 / spec.grapeRate;
+
+      const llBig = logBinomialLikelihood(input.bigCount, G, pBig);
+      const llReg = logBinomialLikelihood(input.regCount, G, pReg);
+      const llGrape = logBinomialLikelihood(grapeK, G, pGrape);
+
+      logPosteriors.push(logPrior + llBig + llReg + llGrape);
+    }
+
+    // オーバーフロー防止のため最大値を引いてから正規化 (log-sum-exp)
+    const maxLog = Math.max(...logPosteriors);
+    const exps = logPosteriors.map((lp) => Math.exp(lp - maxLog));
+    const sumExps = exps.reduce((a, b) => a + b, 0);
+    return exps.map((e) => e / sumExps);
+  }
+
+  // ------------------------------------------------------------------
+  // 一致度スコア (ベイズとは別指標。仕様書11章)
+  // ------------------------------------------------------------------
+
+  /**
+   * 実測値と理論値の相対誤差から0〜100点のスコアを算出する。
+   * 相対誤差 0% → 100点、相対誤差 30%以上 → 0点、の直線減衰。
+   * @param {number|null} measuredRateDenom 実測確率の分母
+   * @param {number} theoreticalRateDenom 理論確率の分母
+   * @returns {number|null}
+   */
+  function scoreFromRates(measuredRateDenom, theoreticalRateDenom) {
+    if (measuredRateDenom === null || measuredRateDenom === undefined) return null;
+    const measuredP = 1 / measuredRateDenom;
+    const theoreticalP = 1 / theoreticalRateDenom;
+    const relativeError = Math.abs(measuredP - theoreticalP) / theoreticalP;
+    const THRESHOLD = 0.3;
+    const score = 100 * (1 - relativeError / THRESHOLD);
+    return Math.round(Math.min(100, Math.max(0, score)));
+  }
+
+  /**
+   * 設定1〜6それぞれについて、BIG/REG/ブドウ/合算の一致度スコア(0〜100)と
+   * その平均である総合スコアを算出する。
+   * @param {object} machine 機種データ
+   * @param {object} measured { bigRateDenom, regRateDenom, totalRateDenom, grapeRateDenom }
+   * @returns {Array<object>} 設定ごとの { setting, big, reg, grape, total, overall }
+   */
+  function calculateMatchScores(machine, measured) {
+    const results = [];
+    for (let s = 1; s <= 6; s++) {
+      const spec = machine.settings[s];
+      const combinedDenom = JA.getCombinedRateDenom(spec.bigRate, spec.regRate);
+
+      const big = scoreFromRates(measured.bigRateDenom, spec.bigRate);
+      const reg = scoreFromRates(measured.regRateDenom, spec.regRate);
+      const grape = scoreFromRates(measured.grapeRateDenom, spec.grapeRate);
+      const total = scoreFromRates(measured.totalRateDenom, combinedDenom);
+
+      const scored = [big, reg, grape, total].filter((v) => v !== null);
+      const overall = scored.length
+        ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length)
+        : 0;
+
+      results.push({ setting: s, big, reg, grape, total, overall });
+    }
+    return results;
+  }
+
+  // ------------------------------------------------------------------
+  // 推測根拠 (仕様書17章): BIG/REG/ブドウそれぞれが「設定X相当」かを判定
+  // ------------------------------------------------------------------
+
+  /**
+   * 実測値に理論値が最も近い設定番号を返す(相対誤差が最小の設定)。
+   * @param {object} machine
+   * @param {number|null} measuredRateDenom
+   * @param {'bigRate'|'regRate'|'grapeRate'} field
+   * @returns {number|null}
+   */
+  function nearestSetting(machine, measuredRateDenom, field) {
+    if (measuredRateDenom === null || measuredRateDenom === undefined) return null;
+    const measuredP = 1 / measuredRateDenom;
+    let best = null;
+    let bestDiff = Infinity;
+    for (let s = 1; s <= 6; s++) {
+      const theoreticalP = 1 / machine.settings[s][field];
+      const diff = Math.abs(measuredP - theoreticalP);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * 推測根拠のテキストを生成する。
+   * @param {object} machine
+   * @param {object} measured { bigRateDenom, regRateDenom, grapeRateDenom }
+   * @param {number[]} posterior ベイズ事後確率(設定1〜6)
+   * @returns {object} { bigSetting, regSetting, grapeSetting, topSetting, lines: string[] }
+   */
+  function generateEstimationBasis(machine, measured, posterior) {
+    const bigSetting = nearestSetting(machine, measured.bigRateDenom, 'bigRate');
+    const regSetting = nearestSetting(machine, measured.regRateDenom, 'regRate');
+    const grapeSetting = nearestSetting(machine, measured.grapeRateDenom, 'grapeRate');
+
+    const topSetting = posterior.indexOf(Math.max(...posterior)) + 1;
+
+    const lines = [];
+    if (bigSetting !== null) lines.push(`BIGは設定${bigSetting}相当`);
+    if (regSetting !== null) lines.push(`REGは設定${regSetting}相当`);
+    if (grapeSetting !== null) lines.push(`ブドウは設定${grapeSetting}相当`);
+    lines.push(`総合すると設定${topSetting}が最有力`);
+
+    return { bigSetting, regSetting, grapeSetting, topSetting, lines };
+  }
+
+  // ------------------------------------------------------------------
+  // AIコメント (ルールベース, 仕様書13章)
+  // ------------------------------------------------------------------
+
+  /**
+   * ルールベースでAIコメントを生成する。
+   * @param {object} machine
+   * @param {object} measured { bigRateDenom, regRateDenom, grapeRateDenom }
+   * @param {number[]} posterior
+   * @returns {string[]}
+   */
+  function generateAiComments(machine, measured, posterior) {
+    const comments = [];
+
+    // REGの評価: 設定5・6のREG理論値と比較して優秀かどうか
+    if (measured.regRateDenom !== null) {
+      const regP = 1 / measured.regRateDenom;
+      const setting6RegP = 1 / machine.settings[6].regRate;
+      const setting1RegP = 1 / machine.settings[1].regRate;
+      if (regP >= setting6RegP * 0.95) {
+        comments.push('REGが非常に優秀です。');
+      } else if (regP <= setting1RegP * 1.05) {
+        comments.push('REGは低設定並みで振るいません。');
+      }
+    }
+
+    // BIGの評価
+    if (measured.bigRateDenom !== null) {
+      const bigP = 1 / measured.bigRateDenom;
+      const setting6BigP = 1 / machine.settings[6].bigRate;
+      const setting1BigP = 1 / machine.settings[1].bigRate;
+      if (bigP >= setting6BigP * 0.95) {
+        comments.push('BIGが非常に優秀です。');
+      } else if (bigP <= setting1BigP * 1.05) {
+        comments.push('BIGは低設定並みで振るいません。');
+      }
+    }
+
+    // ブドウの評価: 設定5以上相当かどうか
+    if (measured.grapeRateDenom !== null) {
+      const grapeP = 1 / measured.grapeRateDenom;
+      const setting5GrapeP = 1 / machine.settings[5].grapeRate;
+      if (grapeP >= setting5GrapeP * 0.98) {
+        comments.push('ブドウは設定5以上です。');
+      }
+    }
+
+    // BIG先行型 / REG先行型
+    if (measured.bigRateDenom !== null && measured.regRateDenom !== null) {
+      if (measured.bigRateDenom < measured.regRateDenom * 0.6) {
+        comments.push('BIG先行型です。');
+      } else if (measured.regRateDenom < measured.bigRateDenom * 0.6) {
+        comments.push('REG先行型です。');
+      }
+    }
+
+    // 高設定濃厚判定: 設定5+6の事後確率合計
+    const highSettingProb = posterior[4] + posterior[5];
+    const lowSettingProb = posterior[0] + posterior[1];
+    if (highSettingProb >= 0.6) {
+      comments.push('設定5〜6が有力です。');
+    } else if (lowSettingProb >= 0.6) {
+      comments.push('設定1〜2の可能性が高いです。');
+    }
+
+    if (comments.length === 0) {
+      comments.push('現時点では判断材料が不足しています。回転数を重ねましょう。');
+    }
+
+    return comments;
+  }
+
+  // ------------------------------------------------------------------
+  // 感度分析 (仕様書15章): 差枚を ±300/±200/±100 させた場合の比較
+  // ------------------------------------------------------------------
+
+  /**
+   * 差枚数を変動させた場合のブドウ逆算・設定推測の変化を比較する。
+   * @param {object} machine
+   * @param {object} input { totalSpins, bigCount, regCount, diffCoins }
+   * @param {number} captureRate 取得率 (現在選択中のチェリー狙い精度)
+   * @returns {Array<object>} { label, diffCoins, grapeRateDenom, posterior, topSetting }
+   */
+  function calculateSensitivity(machine, input, captureRate) {
+    const offsets = [
+      { label: '−300枚', delta: -300 },
+      { label: '−200枚', delta: -200 },
+      { label: '−100枚', delta: -100 },
+      { label: '現在', delta: 0 },
+      { label: '+100枚', delta: 100 },
+      { label: '+200枚', delta: 200 },
+      { label: '+300枚', delta: 300 }
+    ];
+
+    return offsets.map(({ label, delta }) => {
+      const adjustedInput = { ...input, diffCoins: input.diffCoins + delta };
+      const analysis = calculator.calcGrapeAnalysis(machine, adjustedInput, captureRate);
+      const posterior = calculatePosterior(machine, adjustedInput, analysis.estimatedGrapeCount);
+      const topSetting = posterior.indexOf(Math.max(...posterior)) + 1;
+      return {
+        label,
+        diffCoins: adjustedInput.diffCoins,
+        grapeRateDenom: analysis.grapeRateDenom,
+        posterior,
+        topSetting
+      };
+    });
+  }
+
+  return {
+    logBinomialLikelihood,
+    calculatePosterior,
+    calculateMatchScores,
+    generateEstimationBasis,
+    generateAiComments,
+    calculateSensitivity
+  };
+})();
+
+</script>
+<script>
+/**
+ * charts.js
+ *
+ * Canvas 2D APIのみを用いたグラフ描画モジュール(外部ライブラリ不使用、オフライン動作対応)。
+ * 横棒グラフ・レーダーチャート・感度分析グラフを提供する。
+ */
+
+var JA = window.JA || (window.JA = {});
+
+JA.charts = (function () {
+  const COLORS = {
+    grid: 'rgba(255, 255, 255, 0.12)',
+    text: '#c9d1d9',
+    bar: '#4f8ef7',
+    barHighlight: '#ffb347',
+    line1: '#4f8ef7',
+    line2: '#ff6b6b',
+    axis: 'rgba(255, 255, 255, 0.35)'
+  };
+
+  /**
+   * CanvasをdevicePixelRatioに合わせて高解像度化する。
+   * @param {HTMLCanvasElement} canvas
+   * @returns {CanvasRenderingContext2D}
+   */
+  function prepareCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = canvas.clientWidth || canvas.width;
+    const cssHeight = canvas.clientHeight || canvas.height;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    return { ctx, width: cssWidth, height: cssHeight };
+  }
+
+  /**
+   * 横棒グラフを描画する(ベイズ事後確率・一致度スコアなど)。
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} data { labels: string[], values: number[] (0-100), highlightIndex?: number, valueSuffix?: string }
+   */
+  function drawHorizontalBarChart(canvas, data) {
+    const { labels, values, highlightIndex, valueSuffix } = data;
+    const { ctx, width, height } = prepareCanvas(canvas);
+
+    const paddingLeft = 92;
+    const paddingRight = 56;
+    const paddingY = 8;
+    const rowCount = labels.length;
+    const rowHeight = (height - paddingY * 2) / rowCount;
+    const chartWidth = width - paddingLeft - paddingRight;
+    const maxValue = 100;
+
+    ctx.font = '13px sans-serif';
+    ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < rowCount; i++) {
+      const y = paddingY + i * rowHeight;
+      const barHeight = Math.max(10, rowHeight * 0.55);
+      const barY = y + (rowHeight - barHeight) / 2;
+      const value = Math.max(0, Math.min(maxValue, values[i] || 0));
+      const barWidth = (value / maxValue) * chartWidth;
+      const isHighlight = i === highlightIndex;
+
+      // ラベル
+      ctx.fillStyle = COLORS.text;
+      ctx.textAlign = 'right';
+      ctx.fillText(labels[i], paddingLeft - 10, y + rowHeight / 2);
+
+      // 背景トラック
+      ctx.fillStyle = COLORS.grid;
+      ctx.fillRect(paddingLeft, barY, chartWidth, barHeight);
+
+      // バー本体
+      ctx.fillStyle = isHighlight ? COLORS.barHighlight : COLORS.bar;
+      ctx.fillRect(paddingLeft, barY, barWidth, barHeight);
+
+      // 数値ラベル
+      ctx.fillStyle = COLORS.text;
+      ctx.textAlign = 'left';
+      const suffix = valueSuffix || '%';
+      ctx.fillText(
+        `${value.toFixed(1)}${suffix}`,
+        paddingLeft + Math.max(barWidth, 2) + 8,
+        y + rowHeight / 2
+      );
+    }
+  }
+
+  /**
+   * レーダーチャートを描画する(BIG/REG/ブドウ/合算 の一致度など)。
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} data { axes: string[], values: number[] (0-100) }
+   */
+  function drawRadarChart(canvas, data) {
+    const { axes, values } = data;
+    const { ctx, width, height } = prepareCanvas(canvas);
+
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.min(width, height) / 2 - 36;
+    const n = axes.length;
+    const maxValue = 100;
+
+    function pointFor(index, value) {
+      const angle = (Math.PI * 2 * index) / n - Math.PI / 2;
+      const r = (value / maxValue) * radius;
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    }
+
+    // 目盛りグリッド (25/50/75/100%)
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75, 1.0].forEach((ratio) => {
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const p = pointFor(i % n, maxValue * ratio);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    });
+
+    // 軸線とラベル
+    ctx.strokeStyle = COLORS.axis;
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      const p = pointFor(i, maxValue);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+
+      const labelAngle = (Math.PI * 2 * i) / n - Math.PI / 2;
+      const labelR = radius + 18;
+      const lx = cx + labelR * Math.cos(labelAngle);
+      const ly = cy + labelR * Math.sin(labelAngle);
+      ctx.fillText(axes[i], lx, ly);
+    }
+
+    // データ多角形
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const p = pointFor(i % n, Math.max(0, Math.min(maxValue, values[i % n] || 0)));
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(79, 142, 247, 0.35)';
+    ctx.fill();
+    ctx.strokeStyle = COLORS.bar;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // データ点
+    ctx.fillStyle = COLORS.bar;
+    for (let i = 0; i < n; i++) {
+      const p = pointFor(i, Math.max(0, Math.min(maxValue, values[i] || 0)));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /**
+   * 感度分析グラフ(折れ線グラフ)を描画する。
+   * 左軸: 逆算ブドウ確率の分母 / 右軸的な扱いとして最有力設定の事後確率(%)を第2系列で重ねる。
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} data { labels: string[], grapeValues: number[], probValues: number[] }
+   */
+  function drawSensitivityChart(canvas, data) {
+    const { labels, grapeValues, probValues } = data;
+    const { ctx, width, height } = prepareCanvas(canvas);
+
+    const paddingLeft = 56;
+    const paddingRight = 56;
+    const paddingTop = 24;
+    const paddingBottom = 32;
+    const chartWidth = width - paddingLeft - paddingRight;
+    const chartHeight = height - paddingTop - paddingBottom;
+    const n = labels.length;
+
+    const validGrape = grapeValues.filter((v) => v !== null && isFinite(v));
+    const grapeMin = validGrape.length ? Math.min(...validGrape) * 0.9 : 0;
+    const grapeMax = validGrape.length ? Math.max(...validGrape) * 1.1 : 10;
+
+    function xFor(i) {
+      return paddingLeft + (chartWidth * i) / (n - 1);
+    }
+    function yForGrape(v) {
+      if (v === null || !isFinite(v)) return null;
+      const ratio = (v - grapeMin) / (grapeMax - grapeMin || 1);
+      return paddingTop + chartHeight * (1 - ratio);
+    }
+    function yForProb(v) {
+      const ratio = v / 100;
+      return paddingTop + chartHeight * (1 - ratio);
+    }
+
+    // グリッド
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    for (let g = 0; g <= 4; g++) {
+      const y = paddingTop + (chartHeight * g) / 4;
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(paddingLeft + chartWidth, y);
+      ctx.stroke();
+    }
+
+    // X軸ラベル
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    for (let i = 0; i < n; i++) {
+      ctx.fillText(labels[i], xFor(i), height - 10);
+    }
+
+    // 系列1: 逆算ブドウ確率の分母
+    ctx.beginPath();
+    let started = false;
+    grapeValues.forEach((v, i) => {
+      const y = yForGrape(v);
+      if (y === null) return;
+      if (!started) {
+        ctx.moveTo(xFor(i), y);
+        started = true;
+      } else {
+        ctx.lineTo(xFor(i), y);
+      }
+    });
+    ctx.strokeStyle = COLORS.line1;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    grapeValues.forEach((v, i) => {
+      const y = yForGrape(v);
+      if (y === null) return;
+      ctx.beginPath();
+      ctx.arc(xFor(i), y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.line1;
+      ctx.fill();
+    });
+
+    // 系列2: 最有力設定の事後確率(%)
+    ctx.beginPath();
+    probValues.forEach((v, i) => {
+      const y = yForProb(v);
+      if (i === 0) ctx.moveTo(xFor(i), y);
+      else ctx.lineTo(xFor(i), y);
+    });
+    ctx.strokeStyle = COLORS.line2;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    probValues.forEach((v, i) => {
+      const y = yForProb(v);
+      ctx.beginPath();
+      ctx.arc(xFor(i), y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.line2;
+      ctx.fill();
+    });
+
+    // 凡例
+    ctx.textAlign = 'left';
+    ctx.fillStyle = COLORS.line1;
+    ctx.fillRect(paddingLeft, 4, 10, 10);
+    ctx.fillStyle = COLORS.text;
+    ctx.fillText('逆算ブドウ(分母)', paddingLeft + 16, 9);
+    ctx.fillStyle = COLORS.line2;
+    ctx.fillRect(paddingLeft + 140, 4, 10, 10);
+    ctx.fillStyle = COLORS.text;
+    ctx.fillText('最有力設定の確率(%)', paddingLeft + 156, 9);
+  }
+
+  return {
+    drawHorizontalBarChart,
+    drawRadarChart,
+    drawSensitivityChart
+  };
+})();
+
+</script>
+<script>
+/**
+ * ui.js
+ *
+ * DOM描画専用モジュール。計算ロジック(calculator.js / bayes.js)には一切関与せず、
+ * 与えられたデータをDOMに反映することだけを担当する(計算ロジックとUIの完全分離)。
+ */
+
+var JA = window.JA || (window.JA = {});
+
+JA.ui = (function () {
+  /** 確率の分母を "1/xxx.x" 形式の文字列に整形する。null の場合は "-"。 */
+  function formatRate(denom) {
+    if (denom === null || denom === undefined || !isFinite(denom)) return '-';
+    return `1/${denom.toFixed(1)}`;
+  }
+
+  /** パーセント表示に整形する。 */
+  function formatPercent(value, digits) {
+    if (value === null || value === undefined || !isFinite(value)) return '-';
+    return `${value.toFixed(digits === undefined ? 1 : digits)}%`;
+  }
+
+  /**
+   * 実測確率と理論(設定)確率を比較し、色分け区分を返す (仕様書9章)。
+   * @param {number|null} measuredDenom 実測確率の分母
+   * @param {number} theoreticalDenom 設定の理論確率の分母
+   * @returns {'good'|'near'|'bad'|'neutral'}
+   */
+  function classifyMeasured(measuredDenom, theoreticalDenom) {
+    if (measuredDenom === null || measuredDenom === undefined || !isFinite(measuredDenom)) {
+      return 'neutral';
+    }
+    const measuredP = 1 / measuredDenom;
+    const theoreticalP = 1 / theoreticalDenom;
+    const ratio = measuredP / theoreticalP;
+    if (ratio >= 1.05) return 'good';
+    if (ratio >= 0.95) return 'near';
+    return 'bad';
+  }
+
+  /** 機種選択プルダウンを構築する。 */
+  function populateMachineSelect(selectEl, machines) {
+    selectEl.innerHTML = '';
+    machines.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  /** 入力チェックの警告表示を更新する。 */
+  function renderWarnings(sectionEl, listEl, warnings) {
+    listEl.innerHTML = '';
+    if (!warnings.length) {
+      sectionEl.classList.add('hidden');
+      return;
+    }
+    sectionEl.classList.remove('hidden');
+    warnings.forEach((w) => {
+      const li = document.createElement('li');
+      li.textContent = w;
+      listEl.appendChild(li);
+    });
+  }
+
+  /** 実測値パネルを更新する (仕様書7章)。 */
+  function renderMeasured(elements, measured) {
+    elements.big.textContent = formatRate(measured.bigRateDenom);
+    elements.reg.textContent = formatRate(measured.regRateDenom);
+    elements.total.textContent = formatRate(measured.totalRateDenom);
+    elements.grape.textContent = formatRate(measured.grapeRateDenom);
+  }
+
+  /** 信頼度バッジを更新する (仕様書12章)。 */
+  function renderConfidence(badgeEl, level) {
+    badgeEl.textContent = `信頼度: ${level}`;
+    badgeEl.className = `badge badge-${level === '低' ? 'low' : level === '普通' ? 'mid' : level === '高' ? 'high' : 'vhigh'}`;
+  }
+
+  /** AIコメントを更新する (仕様書13章)。 */
+  function renderAiComments(listEl, comments) {
+    listEl.innerHTML = '';
+    comments.forEach((c) => {
+      const li = document.createElement('li');
+      li.textContent = c;
+      listEl.appendChild(li);
+    });
+  }
+
+  /** ベイズ推定の横棒グラフを描画する (仕様書10章)。 */
+  function renderBayesChart(canvas, posterior) {
+    const labels = [1, 2, 3, 4, 5, 6].map((s) => `設定${s}`);
+    const values = posterior.map((p) => p * 100);
+    const highlightIndex = values.indexOf(Math.max(...values));
+    JA.charts.drawHorizontalBarChart(canvas, { labels, values, highlightIndex, valueSuffix: '%' });
+  }
+
+  /** 一致度スコア(レーダーチャート + 一覧)を描画する (仕様書11章)。 */
+  function renderMatchScore(radarCanvas, listEl, matchScores) {
+    const best = matchScores.reduce((a, b) => (b.overall > a.overall ? b : a));
+    JA.charts.drawRadarChart(radarCanvas, {
+      axes: ['BIG', 'REG', 'ブドウ', '合算'],
+      values: [best.big || 0, best.reg || 0, best.grape || 0, best.total || 0]
+    });
+
+    listEl.innerHTML = '';
+    matchScores.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'match-score-row' + (m.setting === best.setting ? ' is-best' : '');
+
+      const label = document.createElement('span');
+      label.className = 'match-score-label';
+      label.textContent = `設定${m.setting}`;
+
+      const track = document.createElement('span');
+      track.className = 'match-score-track';
+      const bar = document.createElement('span');
+      bar.className = 'match-score-bar';
+      bar.style.width = `${m.overall}%`;
+      track.appendChild(bar);
+
+      const value = document.createElement('span');
+      value.className = 'match-score-value';
+      value.textContent = `${m.overall}点`;
+
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(value);
+      listEl.appendChild(row);
+    });
+  }
+
+  /** 推測根拠の一覧を更新する (仕様書17章)。 */
+  function renderEstimationBasis(listEl, basis) {
+    listEl.innerHTML = '';
+    basis.lines.forEach((line) => {
+      const li = document.createElement('li');
+      li.textContent = line;
+      listEl.appendChild(li);
+    });
+  }
+
+  /** スペック表(設定1〜6 + 実測値行)を描画する (仕様書8/9章)。 */
+  function renderSpecTable(tbody, tfoot, machine, measured) {
+    tbody.innerHTML = '';
+    for (let s = 1; s <= 6; s++) {
+      const spec = machine.settings[s];
+      const combinedDenom = JA.getCombinedRateDenom(spec.bigRate, spec.regRate);
+
+      const tr = document.createElement('tr');
+
+      const cells = [
+        { text: `設定${s}`, cls: '' },
+        { text: formatRate(spec.bigRate), cls: classifyMeasured(measured.bigRateDenom, spec.bigRate) },
+        { text: formatRate(spec.regRate), cls: classifyMeasured(measured.regRateDenom, spec.regRate) },
+        { text: formatRate(combinedDenom), cls: classifyMeasured(measured.totalRateDenom, combinedDenom) },
+        { text: formatRate(spec.grapeRate), cls: classifyMeasured(measured.grapeRateDenom, spec.grapeRate) },
+        { text: formatPercent(spec.rtp), cls: '' }
+      ];
+      cells.forEach((c) => {
+        const td = document.createElement('td');
+        td.textContent = c.text;
+        if (c.cls) td.classList.add(`cell-${c.cls}`);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+
+    tfoot.innerHTML = '';
+    const trMeasured = document.createElement('tr');
+    trMeasured.className = 'measured-row';
+    [
+      '実測値',
+      formatRate(measured.bigRateDenom),
+      formatRate(measured.regRateDenom),
+      formatRate(measured.totalRateDenom),
+      formatRate(measured.grapeRateDenom),
+      '-'
+    ].forEach((text) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      trMeasured.appendChild(td);
+    });
+    tfoot.appendChild(trMeasured);
+  }
+
+  /** チェリー精度比較テーブルを描画する (仕様書14章)。 */
+  function renderCherryComparisonTable(tbody, results) {
+    tbody.innerHTML = '';
+    results.forEach((r) => {
+      const tr = document.createElement('tr');
+      [
+        `${Math.round(r.captureRate * 100)}%`,
+        formatRate(r.grapeRateDenom),
+        `設定${r.topSetting}`,
+        formatPercent(r.topProb * 100)
+      ].forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  /** 感度分析(グラフ + テーブル)を描画する (仕様書15章)。 */
+  function renderSensitivity(canvas, tbody, sensitivityResults) {
+    JA.charts.drawSensitivityChart(canvas, {
+      labels: sensitivityResults.map((r) => r.label),
+      grapeValues: sensitivityResults.map((r) => r.grapeRateDenom),
+      probValues: sensitivityResults.map((r) => Math.max(...r.posterior) * 100)
+    });
+
+    tbody.innerHTML = '';
+    sensitivityResults.forEach((r) => {
+      const tr = document.createElement('tr');
+      if (r.label === '現在') tr.classList.add('current-row');
+      [r.label, `${r.diffCoins}枚`, formatRate(r.grapeRateDenom), `設定${r.topSetting}`].forEach(
+        (text) => {
+          const td = document.createElement('td');
+          td.textContent = text;
+          tr.appendChild(td);
+        }
+      );
+      tbody.appendChild(tr);
+    });
+  }
+
+  /** 計算過程の詳細を描画する (仕様書16章)。 */
+  function renderCalcProcess(listEl, analysis) {
+    listEl.innerHTML = '';
+    const items = [
+      ['投入枚数', `${analysis.investment.toFixed(1)} 枚`],
+      ['BIG払出', `${analysis.bigPayoutTotal.toFixed(1)} 枚`],
+      ['REG払出', `${analysis.regPayoutTotal.toFixed(1)} 枚`],
+      ['チェリー払出(期待値)', `${analysis.cherryPayoutExpected.toFixed(1)} 枚`],
+      ['推定ブドウ回数', `${analysis.estimatedGrapeCount.toFixed(1)} 回`],
+      ['逆算ブドウ確率', formatRate(analysis.grapeRateDenom)]
+    ];
+    items.forEach(([label, value]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="calc-label">${label}</span><span class="calc-value">${value}</span>`;
+      listEl.appendChild(li);
+    });
+  }
+
+  /** セッション履歴テーブルを描画する (仕様書18章)。 */
+  function renderHistory(tbody, historyArray) {
+    tbody.innerHTML = '';
+    historyArray.forEach((h, i) => {
+      const tr = document.createElement('tr');
+      [
+        String(i + 1),
+        h.machineName,
+        String(h.totalSpins),
+        String(h.bigCount),
+        String(h.regCount),
+        `${h.diffCoins}枚`,
+        `設定${h.topSetting}`
+      ].forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  return {
+    formatRate,
+    formatPercent,
+    classifyMeasured,
+    populateMachineSelect,
+    renderWarnings,
+    renderMeasured,
+    renderConfidence,
+    renderAiComments,
+    renderBayesChart,
+    renderMatchScore,
+    renderEstimationBasis,
+    renderSpecTable,
+    renderCherryComparisonTable,
+    renderSensitivity,
+    renderCalcProcess,
+    renderHistory
+  };
+})();
+
+</script>
+<script>
+/**
+ * app.js
+ *
+ * アプリケーションのエントリーポイント。
+ * DOM要素の取得・イベント配線・各モジュール(calculator/bayes/ui/charts)の呼び出し順序の
+ * 制御(オーケストレーション)のみを担当する。計算ロジックそのものはここには書かない。
+ */
+
+(function () {
+  const calculator = JA.calculator;
+  const bayes = JA.bayes;
+  const ui = JA.ui;
+
+  // セッション履歴 (仕様書18章: LocalStorageは使用せず、ページを開いている間だけメモリ保持)
+  const sessionHistory = [];
+  const MAX_HISTORY = 20;
+
+  const CAPTURE_RATES = [1.0, 0.7, 0.5];
+
+  let dom = null;
+
+  /** DOM要素を一括取得する。 */
+  function queryDom() {
+    return {
+      machineSelect: document.getElementById('machine-select'),
+      totalSpinsInput: document.getElementById('input-total-spins'),
+      bigCountInput: document.getElementById('input-big-count'),
+      regCountInput: document.getElementById('input-reg-count'),
+      diffCoinsInput: document.getElementById('input-diff-coins'),
+      cherryAccuracyGroup: document.getElementById('cherry-accuracy-group'),
+
+      warningsSection: document.getElementById('warnings-section'),
+      warningsList: document.getElementById('warnings-list'),
+
+      confidenceBadge: document.getElementById('confidence-badge'),
+      measured: {
+        big: document.getElementById('measured-big'),
+        reg: document.getElementById('measured-reg'),
+        total: document.getElementById('measured-total'),
+        grape: document.getElementById('measured-grape')
+      },
+
+      aiCommentsList: document.getElementById('ai-comments-list'),
+
+      bayesChart: document.getElementById('bayes-chart'),
+
+      matchRadarChart: document.getElementById('match-radar-chart'),
+      matchScoreList: document.getElementById('match-score-list'),
+
+      estimationBasisList: document.getElementById('estimation-basis-list'),
+
+      specTableBody: document.getElementById('spec-table-body'),
+      specTableMeasured: document.getElementById('spec-table-measured'),
+
+      cherryComparisonBody: document.getElementById('cherry-comparison-body'),
+
+      sensitivityChart: document.getElementById('sensitivity-chart'),
+      sensitivityTableBody: document.getElementById('sensitivity-table-body'),
+
+      calcProcessList: document.getElementById('calc-process-list'),
+
+      saveHistoryBtn: document.getElementById('save-history-btn'),
+      clearHistoryBtn: document.getElementById('clear-history-btn'),
+      historyTableBody: document.getElementById('history-table-body')
+    };
+  }
+
+  /** 現在選択中のチェリー狙い精度(取得率)を取得する。 */
+  function getSelectedCaptureRate() {
+    const checked = dom.cherryAccuracyGroup.querySelector('input[name="cherry-accuracy"]:checked');
+    return checked ? parseFloat(checked.value) : 1.0;
+  }
+
+  /** 入力フォームから数値を読み取る。未入力は0として扱う。 */
+  function readInput() {
+    return {
+      totalSpins: Number(dom.totalSpinsInput.value) || 0,
+      bigCount: Number(dom.bigCountInput.value) || 0,
+      regCount: Number(dom.regCountInput.value) || 0,
+      diffCoins: Number(dom.diffCoinsInput.value) || 0
+    };
+  }
+
+  /**
+   * 現在の入力値・選択機種から解析結果一式を計算する。
+   * @param {object} machine
+   * @param {object} input
+   * @param {number} captureRate
+   * @returns {object}
+   */
+  function computeAnalysis(machine, input, captureRate) {
+    const analysis = calculator.calcGrapeAnalysis(machine, input, captureRate);
+
+    const measured = {
+      bigRateDenom: calculator.calcMeasuredBigRate(input.totalSpins, input.bigCount),
+      regRateDenom: calculator.calcMeasuredRegRate(input.totalSpins, input.regCount),
+      totalRateDenom: calculator.calcMeasuredTotalRate(input.totalSpins, input.bigCount, input.regCount),
+      grapeRateDenom: analysis.grapeRateDenom
+    };
+
+    const posterior = bayes.calculatePosterior(machine, input, analysis.estimatedGrapeCount);
+    const matchScores = bayes.calculateMatchScores(machine, measured);
+    const confidence = calculator.calcConfidenceLevel(input.totalSpins);
+    const basis = bayes.generateEstimationBasis(machine, measured, posterior);
+    const comments = bayes.generateAiComments(machine, measured, posterior);
+    const warnings = calculator.validateInput(input, analysis);
+
+    return { analysis, measured, posterior, matchScores, confidence, basis, comments, warnings };
+  }
+
+  /** 全ての取得率(100/70/50%)についてブドウ逆算・最有力設定を計算する (仕様書14章)。 */
+  function computeCherryComparison(machine, input) {
+    return CAPTURE_RATES.map((captureRate) => {
+      const analysis = calculator.calcGrapeAnalysis(machine, input, captureRate);
+      const posterior = bayes.calculatePosterior(machine, input, analysis.estimatedGrapeCount);
+      const topProb = Math.max(...posterior);
+      const topSetting = posterior.indexOf(topProb) + 1;
+      return { captureRate, grapeRateDenom: analysis.grapeRateDenom, topSetting, topProb };
+    });
+  }
+
+  /** 画面全体を現在の入力値に基づいて再描画する (リアルタイム更新)。 */
+  function renderAll() {
+    const machine = JA.getMachineById(dom.machineSelect.value);
+    if (!machine) return;
+
+    const input = readInput();
+    const captureRate = getSelectedCaptureRate();
+
+    const result = computeAnalysis(machine, input, captureRate);
+
+    ui.renderWarnings(dom.warningsSection, dom.warningsList, result.warnings);
+    ui.renderMeasured(dom.measured, result.measured);
+    ui.renderConfidence(dom.confidenceBadge, result.confidence);
+    ui.renderAiComments(dom.aiCommentsList, result.comments);
+    ui.renderBayesChart(dom.bayesChart, result.posterior);
+    ui.renderMatchScore(dom.matchRadarChart, dom.matchScoreList, result.matchScores);
+    ui.renderEstimationBasis(dom.estimationBasisList, result.basis);
+    ui.renderSpecTable(dom.specTableBody, dom.specTableMeasured, machine, result.measured);
+    ui.renderCalcProcess(dom.calcProcessList, result.analysis);
+
+    const cherryComparison = computeCherryComparison(machine, input);
+    ui.renderCherryComparisonTable(dom.cherryComparisonBody, cherryComparison);
+
+    const sensitivity = bayes.calculateSensitivity(machine, input, captureRate);
+    ui.renderSensitivity(dom.sensitivityChart, dom.sensitivityTableBody, sensitivity);
+
+    // 次回の履歴保存のために最新の解析結果を保持しておく
+    renderAll.lastResult = { machine, input, result };
+  }
+
+  /** 現在の結果をセッション履歴に追加する (仕様書18章: 最大20件、LocalStorage不使用)。 */
+  function saveCurrentToHistory() {
+    const last = renderAll.lastResult;
+    if (!last) return;
+    const topSetting = last.result.posterior
+      ? last.result.posterior.indexOf(Math.max(...last.result.posterior)) + 1
+      : last.result.basis.topSetting;
+
+    sessionHistory.unshift({
+      machineName: last.machine.name,
+      totalSpins: last.input.totalSpins,
+      bigCount: last.input.bigCount,
+      regCount: last.input.regCount,
+      diffCoins: last.input.diffCoins,
+      topSetting: last.result.basis.topSetting
+    });
+    if (sessionHistory.length > MAX_HISTORY) sessionHistory.length = MAX_HISTORY;
+    ui.renderHistory(dom.historyTableBody, sessionHistory);
+  }
+
+  /** 入力欄・機種選択・チェリー精度の変更を監視し、リアルタイム再描画する。 */
+  function bindEvents() {
+    const rerenderTargets = [
+      dom.machineSelect,
+      dom.totalSpinsInput,
+      dom.bigCountInput,
+      dom.regCountInput,
+      dom.diffCoinsInput
+    ];
+    rerenderTargets.forEach((el) => el.addEventListener('input', renderAll));
+    dom.machineSelect.addEventListener('change', renderAll);
+    dom.cherryAccuracyGroup.addEventListener('change', renderAll);
+
+    dom.saveHistoryBtn.addEventListener('click', saveCurrentToHistory);
+    dom.clearHistoryBtn.addEventListener('click', () => {
+      sessionHistory.length = 0;
+      ui.renderHistory(dom.historyTableBody, sessionHistory);
+    });
+
+    window.addEventListener('resize', renderAll);
+  }
+
+  /** PWA用Service Workerを登録する(対応環境かつHTTP(S)配信時のみ)。 */
+  function registerServiceWorker() {
+    if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {
+        // オフライン単体HTML(file://)運用等、登録できない環境では無視する
+      });
+    }
+  }
+
+  function init() {
+    dom = queryDom();
+    ui.populateMachineSelect(dom.machineSelect, JA.machineData);
+
+    // 初期表示用のサンプル値を設定し、起動直後からリアルタイム計算結果を確認できるようにする
+    dom.totalSpinsInput.value = 5000;
+    dom.bigCountInput.value = 18;
+    dom.regCountInput.value = 20;
+    dom.diffCoinsInput.value = -300;
+
+    bindEvents();
+    renderAll();
+    registerServiceWorker();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+
+</script>
+</body>
+</html>
